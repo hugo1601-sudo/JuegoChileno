@@ -187,6 +187,10 @@
   const p2 = makeFighter({name:"O'Higgins", color:'#c9a13b', glow:'#e8cf7a', isP1:false, x:640, stats:STATS.ohiggins});
   let projectiles = [];
   let particles = [];
+  let screenFlash = 0;
+  let screenShake = 0;
+  let hitStop = 0;
+  let superBanner = null; // {text, timer, color}
 
   // ---------- Input ----------
   const keys = {}; // raw keyboard state
@@ -268,7 +272,12 @@
     if(f.cooldown>0) return;
     if(type==='superAtk' && f.meter<100) return;
     f.state=type; f.frame=0; f.attack=f.stats[type]; f.hitApplied=false;
-    if(type==='superAtk') f.meter=0;
+    if(type==='superAtk'){
+      f.meter=0;
+      screenFlash = 16;
+      screenShake = 14;
+      superBanner = { text: f.name.toUpperCase()+' — ¡FURIA ANCESTRAL!', timer:55, color:f.glow };
+    }
   }
   function isBlocking(f, opp){
     const holdingBack = f.isP1 ? virtualOrKey('down','s') : keys['ArrowDown'];
@@ -276,9 +285,11 @@
   }
   function virtualOrKey(vkey, kkey){ return virtual[vkey] || keys[kkey] || keys[kkey.toUpperCase()]; }
 
-  function spawnHitSpark(x,y,color){
-    for(let i=0;i<8;i++){
-      particles.push({x,y,vx:(Math.random()-0.5)*6,vy:(Math.random()-0.5)*6,life:16,color});
+  function spawnHitSpark(x,y,color,count){
+    count = count || 8;
+    for(let i=0;i<count;i++){
+      const speed = 4+Math.random()*6;
+      particles.push({x,y,vx:(Math.random()-0.5)*speed,vy:(Math.random()-0.5)*speed,life:count>12?26:16,color});
     }
   }
 
@@ -297,7 +308,9 @@
       defender.state='hitstun'; defender.frame=0; defender.hitstunTimer=atk.hitstun;
       defender.vy = -4;
     }
-    spawnHitSpark(defender.x, defender.y - 60, blocked? '#8fc7ff' : '#ffcf5c');
+    const isSuper = atk===attacker.stats.superAtk;
+    spawnHitSpark(defender.x, defender.y - 60, blocked? '#8fc7ff' : (isSuper ? '#ffe08a' : '#ffcf5c'), isSuper?18:8);
+    if(isSuper && !blocked){ hitStop = 10; screenShake = 18; }
     updateHUD();
   }
 
@@ -518,6 +531,15 @@
     let flash = (f.state==='hitstun' && f.frame%6<3);
     const bodyColor = flash ? '#ffffff' : f.color;
 
+    if(f.state==='superAtk'){
+      const pulse = 46 + Math.sin(Date.now()/40)*6;
+      const rg = ctx.createRadialGradient(0,-70,4,0,-70,pulse);
+      rg.addColorStop(0, 'rgba(255,224,138,0.85)');
+      rg.addColorStop(1, 'rgba(255,224,138,0)');
+      ctx.fillStyle = rg;
+      ctx.beginPath(); ctx.arc(0,-70,pulse,0,Math.PI*2); ctx.fill();
+    }
+
     // legs
     ctx.fillStyle='#20242c';
     ctx.fillRect(-14,-46,10,46);
@@ -579,32 +601,69 @@
   function drawParticles(){
     for(let i=particles.length-1;i>=0;i--){
       const pt=particles[i];
+      if(pt.maxLife===undefined) pt.maxLife=pt.life;
       pt.x+=pt.vx; pt.y+=pt.vy; pt.life--;
       if(pt.life<=0){ particles.splice(i,1); continue; }
-      ctx.fillStyle=pt.color; ctx.globalAlpha=pt.life/16;
-      ctx.beginPath(); ctx.arc(pt.x,GROUND_Y+pt.y,3,0,Math.PI*2); ctx.fill();
+      ctx.fillStyle=pt.color; ctx.globalAlpha=pt.life/pt.maxLife;
+      ctx.beginPath(); ctx.arc(pt.x,GROUND_Y+pt.y,4,0,Math.PI*2); ctx.fill();
       ctx.globalAlpha=1;
     }
+  }
+
+  function drawSuperBanner(){
+    if(!superBanner) return;
+    const t = superBanner.timer;
+    const fadeIn = Math.min(1, (55-t)/8);
+    const fadeOut = Math.min(1, t/12);
+    const alpha = Math.min(fadeIn, fadeOut);
+    ctx.save();
+    ctx.globalAlpha = alpha;
+    ctx.textAlign='center';
+    ctx.font = "800 30px Cinzel, serif";
+    ctx.lineWidth = 5;
+    ctx.strokeStyle = 'rgba(0,0,0,0.8)';
+    ctx.strokeText(superBanner.text, W/2, 70);
+    ctx.fillStyle = superBanner.color;
+    ctx.fillText(superBanner.text, W/2, 70);
+    ctx.restore();
   }
 
   // ---------- Main loop ----------
   function loop(now){
     if(!roundOver){
-      updateAI();
-      checkSpecialSpawn(p1,p2);
-      checkSpecialSpawn(p2,p1);
-      updateFighter(p1,p2,true);
-      updateFighter(p2,p1,false);
-      updateProjectiles();
-      updateHUD();
-      tickTimer(now);
+      if(hitStop>0){
+        hitStop--;
+      } else {
+        updateAI();
+        checkSpecialSpawn(p1,p2);
+        checkSpecialSpawn(p2,p1);
+        updateFighter(p1,p2,true);
+        updateFighter(p2,p1,false);
+        updateProjectiles();
+        updateHUD();
+        tickTimer(now);
+      }
+    }
+    if(screenShake>0) screenShake--;
+    if(screenFlash>0) screenFlash--;
+    if(superBanner){ superBanner.timer--; if(superBanner.timer<=0) superBanner=null; }
+
+    ctx.save();
+    if(screenShake>0){
+      const s = screenShake;
+      ctx.translate((Math.random()-0.5)*s, (Math.random()-0.5)*s*0.6);
     }
     drawArena();
     drawParticles();
     drawProjectiles();
-    // draw further-back fighter first for slight depth (not critical, same y)
     drawFighter(p1);
     drawFighter(p2);
+    if(screenFlash>0){
+      ctx.fillStyle = `rgba(255,235,180,${(screenFlash/16)*0.55})`;
+      ctx.fillRect(0,0,W,H);
+    }
+    ctx.restore();
+    drawSuperBanner();
     requestAnimationFrame(loop);
   }
   updateHUD();
