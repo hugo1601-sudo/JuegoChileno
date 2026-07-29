@@ -1,0 +1,615 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1, user-scalable=no">
+<title>Leyendas de Chile — Prototipo de Combate</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@600;800&family=Rajdhani:wght@500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg-void:#0b0e14;
+    --bg-panel:#141924;
+    --line:#2a3142;
+    --p1-color:#3f7a4e;   /* Trauco - verde bosque */
+    --p1-glow:#7fd694;
+    --p2-color:#c9a13b;   /* O'Higgins - dorado militar */
+    --p2-glow:#e8cf7a;
+    --danger:#c0392b;
+    --ink:#e8ecf4;
+    --ink-dim:#8b93a7;
+    --accent:#3a6ea5;
+  }
+  *{ box-sizing:border-box; -webkit-tap-highlight-color: transparent; }
+  html,body{
+    margin:0; padding:0; height:100%; background:var(--bg-void); color:var(--ink);
+    font-family:'Rajdhani',sans-serif; overflow:hidden; user-select:none;
+  }
+  .wrap{ display:flex; flex-direction:column; align-items:center; height:100%; padding:10px; gap:8px; }
+  h1{
+    font-family:'Cinzel',serif; font-weight:800; font-size:20px; letter-spacing:2px;
+    margin:2px 0 0 0; color:var(--ink); text-transform:uppercase; text-align:center;
+  }
+  .sub{ font-size:12px; color:var(--ink-dim); letter-spacing:1px; margin-bottom:2px; text-align:center;}
+  .hud{ width:100%; max-width:900px; display:flex; align-items:center; gap:10px; }
+  .hud-side{ flex:1; }
+  .name{ font-family:'Cinzel',serif; font-size:13px; font-weight:700; letter-spacing:1px; margin-bottom:3px; }
+  .name.p1{ color:var(--p1-glow); text-align:left; }
+  .name.p2{ color:var(--p2-glow); text-align:right; }
+  .bar-bg{ height:16px; background:#1b2130; border:2px solid var(--line); border-radius:3px; overflow:hidden; position:relative; }
+  .bar-fill{ height:100%; transition:width 0.12s linear; }
+  .bar-fill.p1{ background:linear-gradient(90deg,#245a30,var(--p1-glow)); }
+  .bar-fill.p2{ background:linear-gradient(90deg,var(--p2-glow),#8a6a1c); float:right; }
+  .meter-bg{ height:8px; background:#1b2130; border:1px solid var(--line); border-radius:2px; margin-top:4px; overflow:hidden; }
+  .meter-fill{ height:100%; background:linear-gradient(90deg,#4a7fd1,#8fc7ff); transition:width 0.12s linear; }
+  .meter-fill.p2{ float:right; background:linear-gradient(90deg,#8fc7ff,#4a7fd1); }
+  .timer{
+    font-family:'Cinzel',serif; font-size:26px; font-weight:800; width:60px; text-align:center;
+    color:var(--ink); background:var(--bg-panel); border:2px solid var(--line); border-radius:4px; padding:2px 0;
+  }
+  #arena-container{ position:relative; width:100%; max-width:900px; }
+  canvas{ width:100%; display:block; background:#000; border:2px solid var(--line); border-radius:6px; }
+  #overlay{
+    position:absolute; inset:0; display:none; flex-direction:column; align-items:center; justify-content:center;
+    background:rgba(6,8,14,0.82); border-radius:6px; text-align:center; gap:14px;
+  }
+  #overlay h2{ font-family:'Cinzel',serif; font-size:30px; letter-spacing:2px; margin:0; }
+  #overlay button, .ctrl-btn-reset{
+    font-family:'Rajdhani',sans-serif; font-weight:700; font-size:16px; letter-spacing:1px;
+    background:var(--accent); color:white; border:none; padding:10px 22px; border-radius:4px; cursor:pointer;
+  }
+  .controls-row{ width:100%; max-width:900px; display:flex; justify-content:space-between; align-items:flex-end; margin-top:2px; }
+  .opt{ display:flex; align-items:center; gap:6px; font-size:13px; color:var(--ink-dim); }
+  .legend{ font-size:11px; color:var(--ink-dim); max-width:900px; text-align:center; line-height:1.5; }
+  .legend b{ color:var(--ink); }
+
+  /* Touch controls */
+  #touch-layer{ position:absolute; inset:0; pointer-events:none; }
+  #joystick-zone{
+    position:absolute; left:16px; bottom:16px; width:110px; height:110px; border-radius:50%;
+    background:rgba(255,255,255,0.06); border:2px solid rgba(255,255,255,0.18); pointer-events:auto;
+  }
+  #joystick-nub{
+    position:absolute; left:35px; top:35px; width:40px; height:40px; border-radius:50%;
+    background:rgba(255,255,255,0.28); border:2px solid rgba(255,255,255,0.5);
+  }
+  #btn-cluster{ position:absolute; right:14px; bottom:14px; display:grid; grid-template-columns:56px 56px; gap:8px; pointer-events:auto; }
+  .fbtn{
+    width:56px; height:56px; border-radius:50%; display:flex; align-items:center; justify-content:center;
+    font-family:'Cinzel',serif; font-weight:700; font-size:14px; color:white; border:2px solid rgba(255,255,255,0.4);
+    background:rgba(58,110,165,0.55); opacity:0.9;
+  }
+  .fbtn.special{ background:rgba(60,150,90,0.55); }
+  .fbtn.super{ grid-column:span 2; width:auto; border-radius:10px; background:rgba(192,57,43,0.4); }
+  .fbtn.super.ready{ background:rgba(232,207,122,0.85); color:#222; box-shadow:0 0 14px var(--p2-glow); }
+  @media (min-width:820px){ #touch-layer{ display:none; } }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>Leyendas de Chile</h1>
+  <div class="sub">Prototipo de combate — Etapa 3: validación de mecánicas</div>
+
+  <div class="hud">
+    <div class="hud-side">
+      <div class="name p1">TRAUCO</div>
+      <div class="bar-bg"><div class="bar-fill p1" id="hp1" style="width:100%"></div></div>
+      <div class="meter-bg"><div class="meter-fill" id="mp1" style="width:0%"></div></div>
+    </div>
+    <div class="timer" id="timer">60</div>
+    <div class="hud-side">
+      <div class="name p2">O'HIGGINS</div>
+      <div class="bar-bg"><div class="bar-fill p2" id="hp2" style="width:100%"></div></div>
+      <div class="meter-bg"><div class="meter-fill p2" id="mp2" style="width:0%"></div></div>
+    </div>
+  </div>
+
+  <div id="arena-container">
+    <canvas id="game" width="900" height="420"></canvas>
+    <div id="overlay">
+      <h2 id="overlay-title">K.O.</h2>
+      <button id="restart-btn">Revancha</button>
+    </div>
+    <div id="touch-layer">
+      <div id="joystick-zone"><div id="joystick-nub"></div></div>
+      <div id="btn-cluster">
+        <div class="fbtn" id="tbtn-light">L</div>
+        <div class="fbtn" id="tbtn-heavy">H</div>
+        <div class="fbtn special" id="tbtn-special">E</div>
+        <div class="fbtn super" id="tbtn-super">SUPER</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="controls-row">
+    <div class="opt"><input type="checkbox" id="cpu-toggle" checked><label for="cpu-toggle">CPU controla a O'Higgins (Jugador 2)</label></div>
+    <button class="ctrl-btn-reset" id="reset-round">Reiniciar Round</button>
+  </div>
+
+  <div class="legend">
+    <b>Jugador 1 (Trauco):</b> A/D mover · W saltar · S bloquear (mantener) · J ligero · K pesado · L especial (agarre) · U súper (con barra llena)<br>
+    <b>Jugador 2 (O'Higgins, si CPU está desactivado):</b> ←/→ mover · ↑ saltar · ↓ bloquear · 1 ligero · 2 pesado · 3 especial (proyectil) · 4 súper<br>
+    En móvil usa el joystick y los botones táctiles (controlan siempre a Trauco).
+  </div>
+</div>
+
+<script>
+(function(){
+  const canvas = document.getElementById('game');
+  const ctx = canvas.getContext('2d');
+  const W = canvas.width, H = canvas.height;
+  const GROUND_Y = H - 60;
+  const GRAVITY = 0.9;
+  const ARENA_MIN = 30, ARENA_MAX = W - 30;
+
+  // ---------- Utility ----------
+  function rectsOverlap(a,b){
+    return a.x < b.x+b.w && a.x+a.w > b.x && a.y < b.y+b.h && a.y+a.h > b.y;
+  }
+  function clamp(v,min,max){ return Math.max(min, Math.min(max,v)); }
+
+  // ---------- Fighter definition ----------
+  function makeFighter(cfg){
+    return {
+      name: cfg.name, color: cfg.color, glow: cfg.glow, isP1: cfg.isP1,
+      x: cfg.x, y: 0, vx:0, vy:0, w:56, h:120,
+      facing: cfg.isP1 ? 1 : -1,
+      hp:100, meter:0,
+      state:'idle', // idle, walk, jump, crouch, block, light, heavy, special, super, hitstun, ko
+      grounded:true,
+      frame:0, // frame counter within current state/attack
+      attack:null, // active attack data
+      hitApplied:false,
+      hitstunTimer:0,
+      cooldown:0, // small delay after any attack before another can start
+      stats: cfg.stats,
+      invulnUntilFrame:0,
+      koFlash:0
+    };
+  }
+
+  const STATS = {
+    trauco: {
+      light:  {startup:9, active:7, recovery:14, dmg:7,  range:58, kb:5,  meterGain:8,  hitstun:14, blockstun:8},
+      heavy:  {startup:16,active:8, recovery:24, dmg:15, range:66, kb:11, meterGain:14, hitstun:22, blockstun:12},
+      special:{startup:12,active:6, recovery:22, dmg:20, range:52, kb:14, meterGain:18, hitstun:26, blockstun:0, grab:true},
+      superAtk:{startup:10,active:10,recovery:26, dmg:34, range:70, kb:20, meterGain:0, hitstun:34, blockstun:14}
+    },
+    ohiggins: {
+      light:  {startup:7, active:6, recovery:11, dmg:6,  range:55, kb:4,  meterGain:8,  hitstun:12, blockstun:7},
+      heavy:  {startup:12,active:7, recovery:18, dmg:14, range:64, kb:10, meterGain:13, hitstun:20, blockstun:11},
+      special:{startup:14,active:0, recovery:20, dmg:12, range:0,  kb:6,  meterGain:15, hitstun:16, blockstun:9, projectile:true},
+      superAtk:{startup:9, active:9, recovery:24, dmg:36, range:72, kb:20, meterGain:0, hitstun:34, blockstun:14}
+    }
+  };
+
+  const p1 = makeFighter({name:'Trauco', color:'#3f7a4e', glow:'#7fd694', isP1:true, x:260, stats:STATS.trauco});
+  const p2 = makeFighter({name:"O'Higgins", color:'#c9a13b', glow:'#e8cf7a', isP1:false, x:640, stats:STATS.ohiggins});
+  let projectiles = [];
+  let particles = [];
+
+  // ---------- Input ----------
+  const keys = {}; // raw keyboard state
+  const virtual = { left:false, right:false, up:false, down:false }; // touch-driven, maps to P1
+  window.addEventListener('keydown', e=>{
+    if(['ArrowUp','ArrowDown','ArrowLeft','ArrowRight',' '].includes(e.key)) e.preventDefault();
+    if(keys[e.key]) return; // ignore repeat
+    keys[e.key]=true;
+    handleEdgePress(e.key);
+  });
+  window.addEventListener('keyup', e=>{ keys[e.key]=false; });
+
+  function handleEdgePress(key){
+    // Player 1
+    if(key==='w'||key==='W') tryJump(p1);
+    if(key==='j'||key==='J') tryAttack(p1,'light',p2);
+    if(key==='k'||key==='K') tryAttack(p1,'heavy',p2);
+    if(key==='l'||key==='L') tryAttack(p1,'special',p2);
+    if(key==='u'||key==='U') tryAttack(p1,'superAtk',p2);
+    // Player 2 (only if CPU off)
+    if(!cpuEnabled()){
+      if(key==='ArrowUp') tryJump(p2);
+      if(key==='1') tryAttack(p2,'light',p1);
+      if(key==='2') tryAttack(p2,'heavy',p1);
+      if(key==='3') tryAttack(p2,'special',p1);
+      if(key==='4') tryAttack(p2,'superAtk',p1);
+    }
+  }
+  function cpuEnabled(){ return document.getElementById('cpu-toggle').checked; }
+
+  // Touch joystick
+  const zone = document.getElementById('joystick-zone');
+  const nub = document.getElementById('joystick-nub');
+  let joyActive=false, joyStartX=0, joyStartY=0;
+  function joyReset(){ nub.style.left='35px'; nub.style.top='35px'; virtual.left=false; virtual.right=false; virtual.down=false; }
+  function joyPoint(clientX, clientY){
+    const rect = zone.getBoundingClientRect();
+    const cx = rect.left+rect.width/2, cy = rect.top+rect.height/2;
+    let dx = clientX-cx, dy = clientY-cy;
+    const max=38;
+    const dist = Math.min(Math.hypot(dx,dy),max);
+    const ang = Math.atan2(dy,dx);
+    const nx = Math.cos(ang)*dist, ny = Math.sin(ang)*dist;
+    nub.style.left = (35+nx)+'px'; nub.style.top=(35+ny)+'px';
+    virtual.left = dx < -18;
+    virtual.right = dx > 18;
+    virtual.down = dy > 22;
+    if(dy < -28 && !joyActive_jumped){ tryJump(p1); joyActive_jumped=true; }
+  }
+  let joyActive_jumped=false;
+  zone.addEventListener('touchstart', e=>{ joyActive=true; joyActive_jumped=false; joyPoint(e.touches[0].clientX,e.touches[0].clientY); }, {passive:true});
+  zone.addEventListener('touchmove', e=>{ if(joyActive) joyPoint(e.touches[0].clientX,e.touches[0].clientY); }, {passive:true});
+  zone.addEventListener('touchend', ()=>{ joyActive=false; joyActive_jumped=false; joyReset(); });
+  // mouse fallback for desktop testing of touch layout
+  zone.addEventListener('mousedown', e=>{ joyActive=true; joyActive_jumped=false; joyPoint(e.clientX,e.clientY); });
+  window.addEventListener('mousemove', e=>{ if(joyActive) joyPoint(e.clientX,e.clientY); });
+  window.addEventListener('mouseup', ()=>{ if(joyActive){ joyActive=false; joyActive_jumped=false; joyReset(); }});
+
+  function bindBtn(id, fn){
+    const el = document.getElementById(id);
+    el.addEventListener('touchstart', e=>{ e.preventDefault(); fn(); }, {passive:false});
+    el.addEventListener('mousedown', fn);
+  }
+  bindBtn('tbtn-light', ()=>tryAttack(p1,'light',p2));
+  bindBtn('tbtn-heavy', ()=>tryAttack(p1,'heavy',p2));
+  bindBtn('tbtn-special', ()=>tryAttack(p1,'special',p2));
+  bindBtn('tbtn-super', ()=>tryAttack(p1,'superAtk',p2));
+
+  // ---------- Game actions ----------
+  function tryJump(f){
+    if(f.grounded && (f.state==='idle'||f.state==='walk'||f.state==='crouch')){
+      f.vy = -15.5; f.grounded=false; f.state='jump';
+    }
+  }
+  function tryAttack(f,type,opp){
+    if(f.state==='ko') return;
+    if(['light','heavy','special','superAtk'].includes(f.state)) return;
+    if(f.state==='hitstun') return;
+    if(f.cooldown>0) return;
+    if(type==='superAtk' && f.meter<100) return;
+    f.state=type; f.frame=0; f.attack=f.stats[type]; f.hitApplied=false;
+    if(type==='superAtk') f.meter=0;
+  }
+  function isBlocking(f, opp){
+    const holdingBack = f.isP1 ? virtualOrKey('down','s') : keys['ArrowDown'];
+    return (f.state==='idle'||f.state==='walk'||f.state==='crouch') && holdingBack && f.grounded;
+  }
+  function virtualOrKey(vkey, kkey){ return virtual[vkey] || keys[kkey] || keys[kkey.toUpperCase()]; }
+
+  function spawnHitSpark(x,y,color){
+    for(let i=0;i<8;i++){
+      particles.push({x,y,vx:(Math.random()-0.5)*6,vy:(Math.random()-0.5)*6,life:16,color});
+    }
+  }
+
+  function applyHit(attacker, defender, atk){
+    const blocked = isBlocking(defender, attacker) && !atk.grab;
+    let dmg = atk.dmg;
+    if(blocked){ dmg = Math.max(1, Math.floor(atk.dmg*0.15)); }
+    defender.hp = clamp(defender.hp - dmg, 0, 100);
+    defender.meter = clamp(defender.meter + Math.floor(atk.meterGain*0.6), 0, 100);
+    attacker.meter = clamp(attacker.meter + atk.meterGain, 0, 100);
+    const dir = attacker.x < defender.x ? 1 : -1;
+    defender.vx = dir*atk.kb*0.6;
+    if(blocked){
+      defender.state='block'; defender.frame=0; defender.hitstunTimer=atk.blockstun;
+    } else {
+      defender.state='hitstun'; defender.frame=0; defender.hitstunTimer=atk.hitstun;
+      defender.vy = -4;
+    }
+    spawnHitSpark(defender.x, defender.y - 60, blocked? '#8fc7ff' : '#ffcf5c');
+    updateHUD();
+  }
+
+  // ---------- CPU AI (simple) ----------
+  let aiTimer=0, aiAction=null;
+  function updateAI(){
+    if(!cpuEnabled()) return;
+    if(p2.state==='ko') return;
+    const dist = Math.abs(p1.x-p2.x);
+    aiTimer--;
+    if(['idle','walk'].includes(p2.state)){
+      // face player handled elsewhere
+      if(aiTimer<=0){
+        aiTimer = 14 + Math.random()*20;
+        const r = Math.random();
+        if(dist>150){ aiAction='approach'; }
+        else if(dist<70){
+          if(r<0.3) aiAction='block';
+          else if(r<0.55) aiAction='light';
+          else if(r<0.75) aiAction='heavy';
+          else if(r<0.9 && p2.meter>=100) aiAction='super';
+          else aiAction='retreat';
+        } else {
+          if(r<0.4) aiAction='special';
+          else if(r<0.7) aiAction='approach';
+          else aiAction='wait';
+        }
+      }
+      keys['ArrowLeft']=false; keys['ArrowRight']=false; keys['ArrowDown']=false;
+      if(aiAction==='approach') keys[p1.x<p2.x?'ArrowLeft':'ArrowRight']=true;
+      else if(aiAction==='retreat') keys[p1.x<p2.x?'ArrowRight':'ArrowLeft']=true;
+      else if(aiAction==='block') keys['ArrowDown']=true;
+      else if(aiAction==='light') tryAttack(p2,'light',p1);
+      else if(aiAction==='heavy') tryAttack(p2,'heavy',p1);
+      else if(aiAction==='special') tryAttack(p2,'special',p1);
+      else if(aiAction==='super') tryAttack(p2,'superAtk',p1);
+    }
+  }
+
+  // ---------- Update ----------
+  function updateFighter(f, opp, isP1){
+    // facing
+    if(!['light','heavy','special','superAtk','hitstun'].includes(f.state)){
+      f.facing = f.x < opp.x ? 1 : -1;
+    }
+    const left = isP1 ? virtualOrKey('left','a') : keys['ArrowLeft'];
+    const right = isP1 ? virtualOrKey('right','d') : keys['ArrowRight'];
+    const back = isP1 ? virtualOrKey('down','s') : keys['ArrowDown'];
+
+    if(f.cooldown>0) f.cooldown--;
+
+    switch(f.state){
+      case 'idle':
+      case 'walk':
+        f.state='idle';
+        if(f.grounded){
+          if(left && !right){ f.vx=-4.2; f.state='walk'; }
+          else if(right && !left){ f.vx=4.2; f.state='walk'; }
+          else { f.vx=0; }
+          if(back && f.vx===0){ /* stand block idle */ }
+        }
+        break;
+      case 'jump':
+        // air drift
+        if(left) f.vx=-3.5; else if(right) f.vx=3.5; else f.vx*=0.98;
+        break;
+      case 'block':
+        f.frame++; f.vx=0;
+        if(f.hitstunTimer>0){ f.hitstunTimer--; } else { f.state='idle'; }
+        break;
+      case 'hitstun':
+        f.frame++; f.vx*=0.9;
+        if(f.hitstunTimer>0){ f.hitstunTimer--; } else { f.state='idle'; }
+        break;
+      case 'light': case 'heavy': case 'special': case 'superAtk':
+        f.vx*=0.85;
+        f.frame++;
+        const atk = f.attack;
+        const startEnd = atk.startup;
+        const activeEnd = atk.startup+atk.active;
+        const recEnd = activeEnd+atk.recovery;
+        if(f.frame>=startEnd && f.frame<activeEnd && !f.hitApplied){
+          const reach = atk.range;
+          const hbX = f.facing===1 ? f.x + f.w/2 : f.x - f.w/2 - reach;
+          const hitbox = {x:hbX, y:f.y-100, w:reach, h:80};
+          const hurtbox = {x:opp.x-opp.w/2, y:opp.y-opp.h, w:opp.w, h:opp.h};
+          if(opp.state!=='ko' && rectsOverlap(hitbox,hurtbox)){
+            f.hitApplied=true;
+            applyHit(f,opp,atk);
+          }
+        }
+        if(f.frame>=recEnd){
+          f.state='idle'; f.frame=0; f.cooldown=4;
+        }
+        break;
+      case 'ko':
+        f.vx*=0.9;
+        break;
+    }
+
+    // physics
+    f.x += f.vx;
+    f.x = clamp(f.x, ARENA_MIN+f.w/2, ARENA_MAX-f.w/2);
+    if(!f.grounded){
+      f.vy += GRAVITY;
+      f.y += f.vy;
+      if(f.y>=0){ f.y=0; f.vy=0; f.grounded=true; if(f.state==='jump') f.state='idle'; }
+    } else {
+      f.y = 0;
+    }
+    // prevent overlap (simple push-apart)
+    const minDist = 58;
+    if(Math.abs(f.x-opp.x) < minDist && f.state!=='ko' && opp.state!=='ko'){
+      const push = (minDist-Math.abs(f.x-opp.x))/2;
+      if(f.x < opp.x){ f.x-=push; } else { f.x+=push; }
+      f.x = clamp(f.x, ARENA_MIN+f.w/2, ARENA_MAX-f.w/2);
+    }
+  }
+
+  function updateProjectiles(){
+    for(let i=projectiles.length-1;i>=0;i--){
+      const pr = projectiles[i];
+      pr.x += pr.vx;
+      const target = pr.owner===p1?p2:p1;
+      const hitbox = {x:pr.x-10,y:pr.y-90,w:20,h:60};
+      const hurtbox = {x:target.x-target.w/2,y:target.y-target.h,w:target.w,h:target.h};
+      if(target.state!=='ko' && rectsOverlap(hitbox,hurtbox)){
+        applyHit(pr.owner, target, {dmg:pr.dmg, kb:8, meterGain:10, hitstun:16, blockstun:9});
+        projectiles.splice(i,1); continue;
+      }
+      if(pr.x<0 || pr.x>W) projectiles.splice(i,1);
+    }
+  }
+
+  // Trigger O'Higgins projectile spawn at right frame of special
+  function checkSpecialSpawn(f, opp){
+    if(f.state==='special' && f.stats.special.projectile){
+      if(f.frame===f.attack.startup && !f.hitApplied){
+        f.hitApplied=true; // reuse flag to avoid double-spawn; projectile itself carries the hit
+        projectiles.push({x:f.x+f.facing*40, y:0, vx:f.facing*9, dmg:f.attack.dmg, owner:f});
+        f.meter = clamp(f.meter + f.attack.meterGain, 0,100);
+      }
+    }
+  }
+
+  // ---------- Round / Timer ----------
+  let roundTime = 60, roundOver=false, lastTick=performance.now();
+  function tickTimer(now){
+    if(roundOver) return;
+    if(now-lastTick>=1000){
+      lastTick=now; roundTime--;
+      document.getElementById('timer').textContent = Math.max(0,roundTime);
+      if(roundTime<=0){ endRound(p1.hp>=p2.hp?p1:p2); }
+    }
+  }
+  function endRound(winner){
+    if(roundOver) return;
+    roundOver=true;
+    document.getElementById('overlay').style.display='flex';
+    document.getElementById('overlay-title').textContent = winner.hp<=0 ? (winner===p1?"O'HIGGINS GANA":"TRAUCO GANA") : (winner.name.toUpperCase()+' GANA POR TIEMPO');
+  }
+  document.getElementById('restart-btn').addEventListener('click', resetMatch);
+  document.getElementById('reset-round').addEventListener('click', resetMatch);
+  function resetMatch(){
+    p1.hp=100; p2.hp=100; p1.meter=0; p2.meter=0;
+    p1.x=260; p2.x=640; p1.y=0; p2.y=0; p1.vx=0; p2.vx=0; p1.vy=0; p2.vy=0;
+    p1.state='idle'; p2.state='idle'; p1.grounded=true; p2.grounded=true;
+    roundTime=60; roundOver=false; projectiles=[]; particles=[];
+    document.getElementById('overlay').style.display='none';
+    document.getElementById('timer').textContent='60';
+    updateHUD();
+  }
+
+  function updateHUD(){
+    document.getElementById('hp1').style.width = p1.hp+'%';
+    document.getElementById('hp2').style.width = p2.hp+'%';
+    document.getElementById('mp1').style.width = p1.meter+'%';
+    document.getElementById('mp2').style.width = p2.meter+'%';
+    const superBtn = document.getElementById('tbtn-super');
+    if(p1.meter>=100) superBtn.classList.add('ready'); else superBtn.classList.remove('ready');
+    if(!roundOver && (p1.hp<=0 || p2.hp<=0)){
+      if(p1.hp<=0) p1.state='ko';
+      if(p2.hp<=0) p2.state='ko';
+      endRound(p1.hp<=0?p2:p1);
+    }
+  }
+
+  // ---------- Draw ----------
+  function drawArena(){
+    // sky gradient (twilight forest meets colonial camp)
+    const g = ctx.createLinearGradient(0,0,0,H);
+    g.addColorStop(0,'#141d2b'); g.addColorStop(0.6,'#1c2436'); g.addColorStop(1,'#2a2320');
+    ctx.fillStyle=g; ctx.fillRect(0,0,W,H);
+    // silhouette hills / camp
+    ctx.fillStyle='#0f1520';
+    ctx.beginPath(); ctx.moveTo(0,GROUND_Y-40);
+    for(let x=0;x<=W;x+=60){ ctx.lineTo(x, GROUND_Y-40-Math.sin(x*0.02)*18); }
+    ctx.lineTo(W,GROUND_Y); ctx.lineTo(0,GROUND_Y); ctx.closePath(); ctx.fill();
+    // ground
+    ctx.fillStyle='#241f1a';
+    ctx.fillRect(0,GROUND_Y,W,H-GROUND_Y);
+    ctx.strokeStyle='rgba(255,255,255,0.06)';
+    for(let x=0;x<W;x+=40){ ctx.beginPath(); ctx.moveTo(x,GROUND_Y); ctx.lineTo(x-10,H); ctx.stroke(); }
+    ctx.strokeStyle='rgba(255,255,255,0.15)';
+    ctx.beginPath(); ctx.moveTo(0,GROUND_Y); ctx.lineTo(W,GROUND_Y); ctx.stroke();
+  }
+
+  function drawFighter(f){
+    const baseX=f.x, baseY=GROUND_Y+f.y;
+    ctx.save();
+    ctx.translate(baseX, baseY);
+    if(f.facing===-1) ctx.scale(-1,1);
+
+    // shadow
+    ctx.fillStyle='rgba(0,0,0,0.4)';
+    ctx.beginPath(); ctx.ellipse(0, 2, 30 - Math.min(20,-f.y*0.15), 7, 0,0,Math.PI*2); ctx.fill();
+
+    let flash = (f.state==='hitstun' && f.frame%6<3);
+    const bodyColor = flash ? '#ffffff' : f.color;
+
+    // legs
+    ctx.fillStyle='#20242c';
+    ctx.fillRect(-14,-46,10,46);
+    ctx.fillRect(4,-46,10,46);
+
+    // torso
+    ctx.fillStyle=bodyColor;
+    const crouch = f.state==='crouch' ? 14:0;
+    ctx.fillRect(-18,-96+crouch,36,54-crouch);
+
+    // attack limb extension
+    if(['light','heavy','special','superAtk'].includes(f.state)){
+      const atk=f.attack;
+      const activeStart=atk.startup, activeEnd=atk.startup+atk.active;
+      let ext=0;
+      if(f.frame<activeStart) ext = (f.frame/activeStart)*atk.range*0.5;
+      else if(f.frame<activeEnd) ext = atk.range*0.85;
+      else ext = atk.range*0.85*(1-((f.frame-activeEnd)/Math.max(1,atk.recovery)));
+      ctx.fillStyle = f.state==='superAtk' ? '#ffe08a' : (f.glow);
+      ctx.fillRect(18, -84, Math.max(0,ext), 14);
+    }
+
+    // head
+    ctx.fillStyle=bodyColor;
+    ctx.beginPath(); ctx.arc(0,-104,15,0,Math.PI*2); ctx.fill();
+    // eye
+    ctx.fillStyle='#0b0e14';
+    ctx.beginPath(); ctx.arc(6,-106,2.6,0,Math.PI*2); ctx.fill();
+
+    // block guard indicator
+    if(f.state==='block'){
+      ctx.strokeStyle='rgba(143,199,255,0.9)'; ctx.lineWidth=3;
+      ctx.strokeRect(-22,-100,44,60);
+    }
+    // super ready glow ring
+    if(f.meter>=100 && f.state!=='ko'){
+      ctx.strokeStyle=f.glow; ctx.lineWidth=2; ctx.globalAlpha=0.5+0.4*Math.sin(Date.now()/150);
+      ctx.beginPath(); ctx.arc(0,-70,42,0,Math.PI*2); ctx.stroke(); ctx.globalAlpha=1;
+    }
+    if(f.state==='ko'){
+      ctx.globalAlpha=0.6; ctx.fillStyle='#000'; ctx.fillRect(-20,-100,40,60); ctx.globalAlpha=1;
+    }
+    ctx.restore();
+
+    // name tag above head
+    ctx.fillStyle='rgba(255,255,255,0.55)';
+    ctx.font='11px Rajdhani'; ctx.textAlign='center';
+  }
+
+  function drawProjectiles(){
+    projectiles.forEach(pr=>{
+      ctx.save();
+      ctx.translate(pr.x, GROUND_Y);
+      ctx.fillStyle='#e8cf7a';
+      ctx.beginPath(); ctx.ellipse(0,-70,14,7,0,0,Math.PI*2); ctx.fill();
+      ctx.restore();
+    });
+  }
+  function drawParticles(){
+    for(let i=particles.length-1;i>=0;i--){
+      const pt=particles[i];
+      pt.x+=pt.vx; pt.y+=pt.vy; pt.life--;
+      if(pt.life<=0){ particles.splice(i,1); continue; }
+      ctx.fillStyle=pt.color; ctx.globalAlpha=pt.life/16;
+      ctx.beginPath(); ctx.arc(pt.x,GROUND_Y+pt.y,3,0,Math.PI*2); ctx.fill();
+      ctx.globalAlpha=1;
+    }
+  }
+
+  // ---------- Main loop ----------
+  function loop(now){
+    if(!roundOver){
+      updateAI();
+      checkSpecialSpawn(p1,p2);
+      checkSpecialSpawn(p2,p1);
+      updateFighter(p1,p2,true);
+      updateFighter(p2,p1,false);
+      updateProjectiles();
+      updateHUD();
+      tickTimer(now);
+    }
+    drawArena();
+    drawParticles();
+    drawProjectiles();
+    // draw further-back fighter first for slight depth (not critical, same y)
+    drawFighter(p1);
+    drawFighter(p2);
+    requestAnimationFrame(loop);
+  }
+  updateHUD();
+  requestAnimationFrame(loop);
+})();
+</script>
+</body>
+</html>
